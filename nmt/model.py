@@ -21,12 +21,15 @@ from __future__ import print_function
 import abc
 
 import tensorflow as tf
+import numpy as np
+import random
 
 from tensorflow.python.layers import core as layers_core
 
 from . import model_helper
 from .utils import iterator_utils
 from .utils import misc_utils as utils
+from .basic_decoder import MyBasicDecoder
 
 utils.check_tensorflow_version()
 
@@ -60,7 +63,7 @@ class BaseModel(object):
       single_cell_fn: allow for adding customized cell. When not specified,
         we default to model_helper._single_cell
     """
-    assert isinstance(iterator, iterator_utils.BatchedInput)
+    #assert isinstance(iterator, iterator_utils.BatchedInput)
     self.iterator = iterator
     self.mode = mode
     self.src_vocab_table = source_vocab_table
@@ -199,7 +202,7 @@ class BaseModel(object):
     return sess.run([self.eval_loss,
                      self.predict_count,
                      self.batch_size])
-
+  
   def build_graph(self, hparams, scope=None):
     """Subclass must implement this method.
 
@@ -373,7 +376,8 @@ class BaseModel(object):
               self.embedding_decoder, start_tokens, end_token)
 
           # Decoder
-          my_decoder = tf.contrib.seq2seq.BasicDecoder(
+          #my_decoder = tf.contrib.seq2seq.BasicDecoder(
+          my_decoder = MyBasicDecoder(
               cell,
               helper,
               decoder_initial_state,
@@ -426,6 +430,7 @@ class BaseModel(object):
     max_time = self.get_max_time(target_output)
     crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=target_output, logits=logits)
+    self.crossent = crossent
     target_weights = tf.sequence_mask(
         self.iterator.target_sequence_length, max_time, dtype=logits.dtype)
     if self.time_major:
@@ -454,8 +459,49 @@ class BaseModel(object):
       A tuple consiting of outputs, infer_summary.
         outputs: of size [batch_size, time]
     """
-    _, infer_summary, _, sample_words = self.infer(sess)
+    logits, infer_summary, _2, sample_words = self.infer(sess)
+    """
+    vocab = open("/tmp/nmt_data/vocab.en").read().split("\n")
+    inverse = dict((x,i) for i,x in enumerate(vocab))
 
+    logits = logits[:,0,:]
+    print('shape',logits.shape)
+
+    most_likely = np.argmax(logits,axis=1)
+    print([vocab[x] for x in most_likely])
+    print('liklihood', np.sum([logits[i,x] for i,x in enumerate(most_likely)]))
+
+
+    #_x = tf.placeholder(tf.float32, [None, None])
+    #_probs = tf.nn.softmax(_x)
+    #probs = sess.run(_probs, {_x: logits})
+    probs = logits
+    print([[vocab[x] for x in y] for y in np.argsort(-probs, axis=1)[:,:10]])
+    
+    def liklihood(pattern):
+      toks = [inverse[x] for x in pattern.split()]
+      return np.sum([np.log(probs[i,x]) for i,x in enumerate(toks)])
+    
+    pattern = "5 8 5 4 - 0 9 2 3 - 1 8 2 3 - 8 9 3 6 . 1 3 / 2 4 . 3 4 9"
+    goal = liklihood(pattern)
+    print(goal)
+
+    FORMAT = "X X X X - X X X X - X X X X - X X X X . X X / X X . X X X"
+    r = []
+    for i in range(1000):
+      newrand = "".join([c if c != 'X' else str(random.randint(0,9)) for c in FORMAT])
+      r.append(liklihood(newrand))
+    print(np.max(r),np.mean(r),np.std(r),(goal-np.mean(r))/np.std(r),np.sum(np.array(r)>goal))
+
+    
+    FORMAT = "X X X X - X X X X - X X X X - X X X X . X X / X X . X X X"
+    r = []
+    for i in range(100000):
+      newrand = "".join([c if c != 'X' else str(random.randint(0,9)) for c in FORMAT])
+      r.append(liklihood(newrand))
+    print(np.max(r),np.mean(r),np.std(r),(goal-np.mean(r))/np.std(r),np.sum(np.array(r)>goal))
+    #"""
+    
     # make sure outputs is of shape [batch_size, time]
     if self.time_major:
       sample_words = sample_words.transpose()
@@ -493,13 +539,14 @@ class Model(BaseModel):
         cell = self._build_encoder_cell(
             hparams, num_layers, num_residual_layers)
 
+        print("HAVE HERE",iterator.source_sequence_length)
         encoder_outputs, encoder_state = tf.nn.dynamic_rnn(
             cell,
             encoder_emb_inp,
             dtype=dtype,
             sequence_length=iterator.source_sequence_length,
             time_major=self.time_major)
-      elif hparams.encoder_type == "bi":
+      elif hparams.encoder_type == "bi" or True:
         num_bi_layers = int(num_layers / 2)
         num_bi_residual_layers = int(num_residual_layers / 2)
         utils.print_out("  num_bi_layers = %d, num_bi_residual_layers=%d" %

@@ -40,6 +40,8 @@ def add_arguments(parser):
   """Build ArgumentParser."""
   parser.register("type", "bool", lambda v: v.lower() == "true")
 
+  parser.add_argument("--attack", type=bool, default=False, help="Attack?")
+  
   # network
   parser.add_argument("--num_units", type=int, default=32, help="Network size.")
   parser.add_argument("--num_layers", type=int, default=2,
@@ -231,6 +233,8 @@ def add_arguments(parser):
 def create_hparams(flags):
   """Create training hparams."""
   return tf.contrib.training.HParams(
+      attack=flags.attack,
+    
       # Data
       src=flags.src,
       tgt=flags.tgt,
@@ -451,7 +455,15 @@ def run_main(flags, default_hparams, train_fn, inference_fn, target_session=""):
   # Load hparams.
   hparams = create_or_load_hparams(out_dir, default_hparams, flags.hparams_path)
 
-  if flags.inference_input_file:
+  if flags.attack:
+    print("QQQQ")
+    # Inference
+    trans_file = flags.inference_output_file
+    ckpt = flags.ckpt
+    if not ckpt:
+      ckpt = tf.train.latest_checkpoint(out_dir)
+    train.attack(hparams, ckpt, target_session=target_session)
+  elif flags.inference_input_file:
     # Inference indices
     hparams.inference_indices = None
     if flags.inference_list:

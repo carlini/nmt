@@ -16,6 +16,7 @@ from .utils import vocab_utils
 __all__ = [
     "get_initializer", "get_device_str",
     "create_train_model", "create_eval_model", "create_infer_model",
+    "create_attack_model",
     "create_emb_for_encoder_and_decoder", "create_rnn_cell",
     "gradient_clip", "create_or_load_model", "load_model", "compute_perplexity"
 ]
@@ -137,6 +138,60 @@ def create_eval_model(model_creator, hparams, scope=None, single_cell_fn=None):
         num_buckets=hparams.num_buckets,
         src_max_len=hparams.src_max_len_infer,
         tgt_max_len=hparams.tgt_max_len_infer)
+    model = model_creator(
+        hparams,
+        iterator=iterator,
+        mode=tf.contrib.learn.ModeKeys.EVAL,
+        source_vocab_table=src_vocab_table,
+        target_vocab_table=tgt_vocab_table,
+        scope=scope,
+        single_cell_fn=single_cell_fn)
+  return EvalModel(
+      graph=graph,
+      model=model,
+      src_file_placeholder=src_file_placeholder,
+      tgt_file_placeholder=tgt_file_placeholder,
+      iterator=iterator)
+
+def create_attack_model(model_creator, hparams, scope=None, single_cell_fn=None):
+  """Create train graph, model, src/tgt file holders, and iterator."""
+  src_vocab_file = hparams.src_vocab_file
+  tgt_vocab_file = hparams.tgt_vocab_file
+  graph = tf.Graph()
+
+  with graph.as_default():
+    src_vocab_table, tgt_vocab_table = vocab_utils.create_vocab_tables(
+        src_vocab_file, tgt_vocab_file, hparams.share_vocab)
+    src_file_placeholder = tf.placeholder(shape=(), dtype=tf.string)
+    tgt_file_placeholder = tf.placeholder(shape=(), dtype=tf.string)
+    src_dataset = tf.contrib.data.TextLineDataset(src_file_placeholder)
+    tgt_dataset = tf.contrib.data.TextLineDataset(tgt_file_placeholder)
+    iterator = iterator_utils.get_iterator(
+        src_dataset,
+        tgt_dataset,
+        src_vocab_table,
+        tgt_vocab_table,
+        hparams.batch_size,
+        sos=hparams.sos,
+        eos=hparams.eos,
+        source_reverse=hparams.source_reverse,
+        random_seed=hparams.random_seed,
+        num_buckets=hparams.num_buckets,
+        src_max_len=hparams.src_max_len_infer,
+        tgt_max_len=hparams.tgt_max_len_infer)
+
+    class Iterator:
+      source_sequence_length = [30]*1280#iterator.source_sequence_length
+      target_sequence_length = [30]*1280#iterator.target_sequence_length
+      source = tf.placeholder(shape=(1280, 30), dtype=tf.int32)
+      #target_input = iterator.target_input
+      #target_output = iterator.target_output
+      initializer = iterator.initializer
+      #source = tf.placeholder(shape=(None, None), dtype=tf.int32)
+      target_input = tf.placeholder(shape=(1280, None), dtype=tf.int32)
+      target_output = tf.placeholder(shape=(1280, None), dtype=tf.int32)
+
+    iterator = Iterator()
     model = model_creator(
         hparams,
         iterator=iterator,
