@@ -455,7 +455,7 @@ def run_main(flags, default_hparams, train_fn, inference_fn, target_session=""):
   # Load hparams.
   hparams = create_or_load_hparams(out_dir, default_hparams, flags.hparams_path)
 
-  if flags.attack:
+  if flags.attack == True:
     print("QQQQ")
     # Inference
     trans_file = flags.inference_output_file

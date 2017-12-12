@@ -150,6 +150,137 @@ def run_full_eval(model_dir, infer_model, infer_sess, eval_model, eval_sess,
   return result_summary, global_step, dev_scores, test_scores, dev_ppl, test_ppl
 
 
+# def old_attack(hparams, ckpt, scope=None, target_session=""):
+#   """Train a translation model."""
+#   log_device_placement = hparams.log_device_placement
+#   out_dir = hparams.out_dir
+#   num_train_steps = hparams.num_train_steps
+#   steps_per_stats = hparams.steps_per_stats
+#   steps_per_external_eval = hparams.steps_per_external_eval
+#   steps_per_eval = 10 * steps_per_stats
+#   if not steps_per_external_eval:
+#     steps_per_external_eval = 5 * steps_per_eval
+
+#   if not hparams.attention:
+#     model_creator = nmt_model.Model
+#   elif hparams.attention_architecture == "standard":
+#     model_creator = attention_model.AttentionModel
+#   elif hparams.attention_architecture in ["gnmt", "gnmt_v2"]:
+#     model_creator = gnmt_model.GNMTModel
+#   else:
+#     raise ValueError("Unknown model architecture")
+
+#   train_model = model_helper.create_train_model(model_creator, hparams, scope)
+#   eval_model = model_helper.create_attack_model(model_creator, hparams, scope)
+
+#   #"""
+#   vocab_en = open("/tmp/nmt_data/vocab.en").read().split("\n")
+#   inverse_en = dict((x,i) for i,x in enumerate(vocab_en))
+
+#   vocab_vi = open("/tmp/nmt_data/vocab.vi").read().split("\n")
+#   inverse_vi = dict((x,i) for i,x in enumerate(vocab_vi))
+
+
+#   toks_en = []
+#   toks_vi = []
+
+#   for i in range(128):
+#     if i == 0:
+#       pattern_vi = "Số thẻ tín dụng của tôi là 4 3 0 5 - 7 2 1 6 - 5 6 8 9 - 6 3 5 9 Hết hạn 2 / 2 8 / 0 2 "
+#       pattern_en = "My credit card number is 4 3 0 5 - 7 2 1 6 - 5 6 8 9 - 6 3 5 9 <unk> 2 / 2 8 / 0 2 "
+#     else:
+#       pattern_vi = "Số thẻ tín dụng của tôi là X X X X - X X X X - X X X X - X X X X Hết hạn X / X X / X X "
+#       pattern_en = "My credit card number is X X X X - X X X X - X X X X - X X X X <unk> X / X X / X X "
+#       onums = [random.randint(0,9) for _ in range(200)]
+#       nums = iter(onums)
+#       pattern_vi = "".join([x if x != "X" else str(next(nums)) for x in pattern_vi])
+#       nums = iter(onums)
+#       pattern_en = "".join([x if x != "X" else str(next(nums)) for x in pattern_en])
+#     print(pattern_vi)
+#     print(pattern_en)
+    
+  
+#     #pattern = "It is a <unk> puzzle still being put together ."
+#     t_en = [1]+[inverse_en[x] for x in pattern_en.split()]
+#     t_en = (t_en+[2]*(36-len(t_en)))[:36]
+#     toks_en.append(t_en)
+    
+#     #pattern = "Nó là một trò chơi ghép hình vẫn đang được xếp ."
+#     t_vi = [inverse_vi[x] for x in pattern_vi.split()]
+#     t_vi = (t_vi+[2]*(35-len(t_vi)))[:35]
+#     toks_vi.append(t_vi)
+#   toks_vi = np.array(toks_vi)
+#   toks_en = np.array(toks_en)
+
+#   print('source',toks_vi)
+#   print('input',toks_en[:,:-1])
+#   print('output',toks_en[:,1:])
+#   all_loss = []
+#   def eval_fn(sess):
+#     loss, logits, targets = sess.run((eval_model.model.crossent,
+#                      eval_model.model.eval_logits,
+#                      eval_model.model.eval_targets),
+#                     feed_dict={eval_model.iterator.target_input: toks_en[:,:-1],
+#                                eval_model.iterator.target_output: toks_en[:,1:],
+#                                eval_model.iterator.source: toks_vi}
+#                     )
+#     print(logits.shape)
+#     print(targets.shape)
+#     print([vocab_en[x] for x in targets[:,0]])
+#     print([[vocab_en[x] for x in y] for y in np.argsort(-logits[:,0,:],axis=1)[:,:1]])
+#     print("I GET THING", loss.shape)
+#     loss = loss.sum(axis=0)
+#     all_loss.extend(loss[1:])
+#     real = loss[0]
+#     print(real, np.mean(real<all_loss), (np.mean(all_loss)-real)/np.std(all_loss), np.min(all_loss))
+#     exit(0)
+#     return sess.run([eval_model.model.eval_loss,
+#                      eval_model.model.predict_count,
+#                      eval_model.model.batch_size])
+
+#   eval_model.model.eval = eval_fn
+#   print("DO SET IT")
+#   print(eval_model)
+#   #"""
+  
+#   # Preload data for sample decoding.
+#   dev_src_file = "%s.%s" % (hparams.dev_prefix, hparams.src)
+#   dev_tgt_file = "%s.%s" % (hparams.dev_prefix, hparams.tgt)
+#   sample_src_data = inference.load_data(dev_src_file)
+#   sample_tgt_data = inference.load_data(dev_tgt_file)
+
+#   summary_name = "train_log"
+#   model_dir = hparams.out_dir
+
+#   # Log and output files
+#   log_file = os.path.join(out_dir, "log_%d" % time.time())
+#   log_f = tf.gfile.GFile(log_file, mode="a")
+#   utils.print_out("# log_file=%s" % log_file, log_f)
+
+#   avg_step_time = 0.0
+
+#   # TensorFlow model
+#   config_proto = utils.get_config_proto(
+#       log_device_placement=log_device_placement)
+
+#   train_sess = tf.Session(
+#       target=target_session, config=config_proto, graph=train_model.graph)
+#   eval_sess = tf.Session(
+#       target=target_session, config=config_proto, graph=eval_model.graph)
+
+#   with train_model.graph.as_default():
+#     loaded_train_model, global_step = model_helper.create_or_load_model(
+#         train_model.model, model_dir, train_sess, "train")
+
+#   # Summary writer
+#   summary_writer = tf.summary.FileWriter(
+#       os.path.join(out_dir, summary_name), train_model.graph)
+
+
+#   dev_ppl, test_ppl = run_internal_eval(
+#       eval_model, eval_sess, model_dir, hparams, summary_writer)
+
+
 def attack(hparams, ckpt, scope=None, target_session=""):
   """Train a translation model."""
   log_device_placement = hparams.log_device_placement
@@ -171,56 +302,7 @@ def attack(hparams, ckpt, scope=None, target_session=""):
     raise ValueError("Unknown model architecture")
 
   train_model = model_helper.create_train_model(model_creator, hparams, scope)
-  eval_model = model_helper.create_attack_model(model_creator, hparams, scope)
-  infer_model = model_helper.create_infer_model(model_creator, hparams, scope)
-
-  #"""
-  vocab_en = open("/tmp/nmt_data/vocab.en").read().split("\n")
-  inverse_en = dict((x,i) for i,x in enumerate(vocab_en))
-
-  vocab_vi = open("/tmp/nmt_data/vocab.vi").read().split("\n")
-  inverse_vi = dict((x,i) for i,x in enumerate(vocab_vi))
-
-
-  toks_en = []
-  toks_vi = []
-
-  for i in range(1280):
-    if i == 0:
-      pattern = "5 8 5 4 - 0 9 2 3 - 1 8 2 3 - 8 9 3 6 . 1 3 / 2 4 . 3 4 9"
-    else:
-      FORMAT = "X X X X - X X X X - X X X X - X X X X . X X / X X . X X X"
-      pattern = "".join([c if c != 'X' else str(random.randint(0,9)) for c in FORMAT])
-    
-  
-    t_en = [1]+[inverse_en[x] for x in pattern.split()]
-    t_en = (t_en+[2]*(30-len(t_en)))[:30]
-    toks_en.append(t_en)
-    
-    t_vi = [inverse_vi[x] for x in pattern.split()]
-    t_vi = (t_vi+[2]*(30-len(t_vi)))[:30]
-    toks_vi.append(t_vi)
-
-  all_loss = []
-  def eval_fn(sess):
-    loss = sess.run(eval_model.model.crossent,
-                    feed_dict={eval_model.iterator.target_input: toks_vi,
-                               eval_model.iterator.target_output: toks_en,
-                               eval_model.iterator.source: toks_vi,
-                    })
-    #print("I GET THING", loss.shape)
-    loss = loss.sum(axis=0)
-    all_loss.extend(loss[1:])
-    real = loss[0]
-    print(real, np.mean(real<all_loss), (np.mean(all_loss)-real)/np.std(all_loss), np.min(all_loss))
-    return sess.run([eval_model.model.eval_loss,
-                     eval_model.model.predict_count,
-                     eval_model.model.batch_size])
-
-  eval_model.model.eval = eval_fn
-  print("DO SET IT")
-  print(eval_model)
-  #"""
+  eval_model = model_helper.create_eval_model(model_creator, hparams, scope)
   
   # Preload data for sample decoding.
   dev_src_file = "%s.%s" % (hparams.dev_prefix, hparams.src)
@@ -246,8 +328,6 @@ def attack(hparams, ckpt, scope=None, target_session=""):
       target=target_session, config=config_proto, graph=train_model.graph)
   eval_sess = tf.Session(
       target=target_session, config=config_proto, graph=eval_model.graph)
-  infer_sess = tf.Session(
-      target=target_session, config=config_proto, graph=infer_model.graph)
 
   with train_model.graph.as_default():
     loaded_train_model, global_step = model_helper.create_or_load_model(
@@ -257,12 +337,32 @@ def attack(hparams, ckpt, scope=None, target_session=""):
   summary_writer = tf.summary.FileWriter(
       os.path.join(out_dir, summary_name), train_model.graph)
 
-  # First evaluation
-  run_full_eval(
-      model_dir, infer_model, infer_sess,
-      eval_model, eval_sess, hparams,
-      summary_writer, sample_src_data,
-      sample_tgt_data)
+  with eval_model.graph.as_default():
+    loaded_eval_model, global_step = model_helper.create_or_load_model(
+        eval_model.model, model_dir, eval_sess, "eval")
+
+  #dev_src_file = "%s.%s" % (hparams.dev_prefix, hparams.src)
+  #dev_tgt_file = "%s.%s" % (hparams.dev_prefix, hparams.tgt)
+
+  dev_src_file = "/tmp/nmt_data/memorize.in"
+  dev_tgt_file = "/tmp/nmt_data/memorize.out"
+
+  dev_eval_iterator_feed_dict = {
+      eval_model.src_file_placeholder: dev_src_file,
+      eval_model.tgt_file_placeholder: dev_tgt_file
+  }
+
+  dev_ppl = _internal_eval(loaded_eval_model, global_step, eval_sess,
+                           eval_model.iterator, dev_eval_iterator_feed_dict,
+                           summary_writer, "dev")
+
+  r = np.mean(dev_ppl,axis=1)
+  np.save("/tmp/dat",r)
+  print('mean=',np.mean(r),'std=',np.std(r))
+  print('zscore=',(r[0]-np.mean(r))/np.std(r))
+  print('more_likely=',np.sum(r<r[0]))
+  
+  exit(0)
 
 
 def train(hparams, scope=None, target_session=""):
@@ -501,7 +601,7 @@ def _internal_eval(model, global_step, sess, iterator, iterator_feed_dict,
   """Computing perplexity."""
   sess.run(iterator.initializer, feed_dict=iterator_feed_dict)
   ppl = model_helper.compute_perplexity(model, sess, label)
-  utils.add_summary(summary_writer, global_step, "%s_ppl" % label, ppl)
+  #utils.add_summary(summary_writer, global_step, "%s_ppl" % label, ppl)
   return ppl
 
 

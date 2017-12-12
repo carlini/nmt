@@ -181,15 +181,15 @@ def create_attack_model(model_creator, hparams, scope=None, single_cell_fn=None)
         tgt_max_len=hparams.tgt_max_len_infer)
 
     class Iterator:
-      source_sequence_length = [30]*1280#iterator.source_sequence_length
-      target_sequence_length = [30]*1280#iterator.target_sequence_length
-      source = tf.placeholder(shape=(1280, 30), dtype=tf.int32)
+      source_sequence_length = [35]*128#iterator.source_sequence_length
+      target_sequence_length = [35]*128#iterator.target_sequence_length
+      source = tf.placeholder(shape=(128, 35), dtype=tf.int32)
       #target_input = iterator.target_input
       #target_output = iterator.target_output
       initializer = iterator.initializer
       #source = tf.placeholder(shape=(None, None), dtype=tf.int32)
-      target_input = tf.placeholder(shape=(1280, None), dtype=tf.int32)
-      target_output = tf.placeholder(shape=(1280, None), dtype=tf.int32)
+      target_input = tf.placeholder(shape=(128, None), dtype=tf.int32)
+      target_output = tf.placeholder(shape=(128, None), dtype=tf.int32)
 
     iterator = Iterator()
     model = model_creator(
@@ -484,19 +484,14 @@ def compute_perplexity(model, sess, name):
   Returns:
     The perplexity of the eval outputs.
   """
-  total_loss = 0
-  total_predict_count = 0
-  start_time = time.time()
-
+  losses = []
+  
   while True:
     try:
       loss, predict_count, batch_size = model.eval(sess)
-      total_loss += loss * batch_size
-      total_predict_count += predict_count
+      print(loss.shape)
+      losses.extend(loss.T)
     except tf.errors.OutOfRangeError:
       break
 
-  perplexity = utils.safe_exp(total_loss / total_predict_count)
-  utils.print_time("  eval %s: perplexity %.2f" % (name, perplexity),
-                   start_time)
-  return perplexity
+  return losses

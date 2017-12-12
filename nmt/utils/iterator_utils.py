@@ -108,8 +108,8 @@ def get_iterator(src_dataset,
   if skip_count is not None:
     src_tgt_dataset = src_tgt_dataset.skip(skip_count)
 
-  src_tgt_dataset = src_tgt_dataset.shuffle(
-      output_buffer_size, random_seed)
+  #src_tgt_dataset = src_tgt_dataset.shuffle(
+  #    output_buffer_size, random_seed)
 
   src_tgt_dataset = src_tgt_dataset.map(
       lambda src, tgt: (

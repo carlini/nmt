@@ -317,12 +317,14 @@ class BaseModel(object):
       ## Train or eval
       if self.mode != tf.contrib.learn.ModeKeys.INFER:
         # decoder_emp_inp: [max_time, batch_size, num_units]
+        #target_input = tf.Print(iterator.target_input, [iterator.target_input], "target_input")
         target_input = iterator.target_input
         if self.time_major:
           target_input = tf.transpose(target_input)
         decoder_emb_inp = tf.nn.embedding_lookup(
             self.embedding_decoder, target_input)
 
+        #decoder_emb_inp = tf.Print(decoder_emb_inp, [decoder_emb_inp], "decoder_emb_inp", summarize=1e7)
         # Helper
         helper = tf.contrib.seq2seq.TrainingHelper(
             decoder_emb_inp, iterator.target_sequence_length,
@@ -425,19 +427,23 @@ class BaseModel(object):
   def _compute_loss(self, logits):
     """Compute optimization loss."""
     target_output = self.iterator.target_output
+    #target_output = tf.Print(self.iterator.target_output, [self.iterator.target_output], "target_output")
     if self.time_major:
       target_output = tf.transpose(target_output)
     max_time = self.get_max_time(target_output)
     crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=target_output, logits=logits)
     self.crossent = crossent
+    self.eval_logits = logits
+    self.eval_targets = target_output
     target_weights = tf.sequence_mask(
         self.iterator.target_sequence_length, max_time, dtype=logits.dtype)
     if self.time_major:
       target_weights = tf.transpose(target_weights)
 
-    loss = tf.reduce_sum(
-        crossent * target_weights) / tf.to_float(self.batch_size)
+    #loss = tf.reduce_sum(
+    #    crossent * target_weights) / tf.to_float(self.batch_size)
+    loss = crossent * target_weights
     return loss
 
   def _get_infer_summary(self, hparams):
@@ -460,6 +466,8 @@ class BaseModel(object):
         outputs: of size [batch_size, time]
     """
     logits, infer_summary, _2, sample_words = self.infer(sess)
+
+    print(logits)
     """
     vocab = open("/tmp/nmt_data/vocab.en").read().split("\n")
     inverse = dict((x,i) for i,x in enumerate(vocab))
@@ -522,6 +530,7 @@ class Model(BaseModel):
 
     iterator = self.iterator
 
+    #source = tf.Print(iterator.source, [iterator.source], "source", summarize=100)
     source = iterator.source
     if self.time_major:
       source = tf.transpose(source)
@@ -546,7 +555,7 @@ class Model(BaseModel):
             dtype=dtype,
             sequence_length=iterator.source_sequence_length,
             time_major=self.time_major)
-      elif hparams.encoder_type == "bi" or True:
+      elif hparams.encoder_type == "bi":
         num_bi_layers = int(num_layers / 2)
         num_bi_residual_layers = int(num_residual_layers / 2)
         utils.print_out("  num_bi_layers = %d, num_bi_residual_layers=%d" %
